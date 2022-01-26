@@ -253,7 +253,7 @@ export class UserSession {
     const nameLookupURL = `${coreNode}${NAME_LOOKUP_PATH}`;
 
     const fallbackLookupURLs = [
-      `https://stacks-node-api.stacks.co${NAME_LOOKUP_PATH}`,
+      `https://core.blockstack.org${NAME_LOOKUP_PATH}`,
       `https://registrar.stacks.co${NAME_LOOKUP_PATH}`,
     ].filter(url => url !== nameLookupURL);
 

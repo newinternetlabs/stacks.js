@@ -81,9 +81,9 @@ const LOG_CONFIG_DEFAULTS: CLI_LOG_CONFIG_TYPE = {
 };
 
 const CONFIG_DEFAULTS: CLI_CONFIG_TYPE = {
-  blockstackAPIUrl: 'http://stacks-node-api.stacks.co',
-  blockstackNodeUrl: 'http://stacks-node-api.stacks.co',
-  broadcastServiceUrl: 'http://stacks-node-api.stacks.co/v2/transactions',
+  blockstackAPIUrl: 'http://core.blockstack.org',
+  blockstackNodeUrl: 'http://core.blockstack.org',
+  broadcastServiceUrl: 'http://core.blockstack.org/v2/transactions',
   utxoServiceUrl: 'https://blockchain.info',
   logConfig: LOG_CONFIG_DEFAULTS,
 };
@@ -1970,9 +1970,9 @@ export const CLI_ARGS = {
         '      "blockHeight": 567890,\n' +
         '      "confirmations": 7,\n' +
         '    }\n' +
-        '    $ stx -H https://stacks-node-api.stacks.co zonefile_push "$ZONEFILE_PATH"\n' +
+        '    $ stx -H https://core.blockstack.org zonefile_push "$ZONEFILE_PATH"\n' +
         '    [\n' +
-        '      "https://stacks-node-api.stacks.co"\n' +
+        '      "https://core.blockstack.org"\n' +
         '    ]\n' +
         '\n',
       group: 'Blockstack ID Management',
@@ -2618,9 +2618,9 @@ export const CLI_ARGS = {
         '    }\n' +
         '    \n' +
         '    $ # send out the new zone file to a Blockstack peer\n' +
-        '    $ stx -H https://stacks-node-api.stacks.co zonefile_push /tmp/zonefile.txt\n' +
+        '    $ stx -H https://core.blockstack.org zonefile_push /tmp/zonefile.txt\n' +
         '    [\n' +
-        '      "https://stacks-node-api.stacks.co"\n' +
+        '      "https://core.blockstack.org"\n' +
         '    ]\n' +
         '\n',
       group: 'Blockstack ID Management',
@@ -2679,9 +2679,9 @@ export const CLI_ARGS = {
         '\n' +
         'Example:\n' +
         '\n' +
-        '    $ stx -H https://stacks-node-api.stacks.co zonefile_push /path/to/zonefile.txt\n' +
+        '    $ stx -H https://core.blockstack.org zonefile_push /path/to/zonefile.txt\n' +
         '    [\n' +
-        '      "https://stacks-node-api.stacks.co"\n' +
+        '      "https://core.blockstack.org"\n' +
         '    ]\n' +
         '\n',
       group: 'Peer Services',
