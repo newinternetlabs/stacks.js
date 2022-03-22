@@ -4,17 +4,25 @@ import { CLI_CONFIG_TYPE } from '../src/argparse';
 
 import * as fixtures from './fixtures/cli.fixture';
 import inquirer from 'inquirer';
-import {ClarityAbi} from '@stacks/transactions';
+import {
+  ClarityAbi,
+  createStacksPrivateKey,
+  publicKeyFromSignature,
+  signWithKey,
+  verifySignature
+} from '@stacks/transactions';
 import {readFileSync} from 'fs';
 import path from 'path';
 import fetchMock from 'jest-fetch-mock';
 import { makekeychainTests, keyInfoTests, MakeKeychainResult, WalletKeyInfoResult } from './derivation-path/keychain';
+import { subdomainOpToZFPieces, SubdomainOp } from '../src/utils';
+import * as crypto from 'crypto';
 
 const TEST_ABI: ClarityAbi = JSON.parse(readFileSync(path.join(__dirname, './abi/test-abi.json')).toString());
 const TEST_FEE_ESTIMATE = JSON.parse(readFileSync(path.join(__dirname, './fee-estimate/test-fee-estimate.json')).toString());
 jest.mock('inquirer');
 
-const { addressConvert, contractFunctionCall, makeKeychain, getStacksWalletKey, preorder, register } = testables as any;
+const { addressConvert, contractFunctionCall, makeKeychain, getStacksWalletKey, preorder, register, migrateSubdomains } = testables as any;
 
 const mainnetNetwork = new CLINetworkAdapter(
   getNetwork({} as CLI_CONFIG_TYPE, false),
@@ -265,5 +273,97 @@ describe('BNS', () => {
     const txResult = await preorder(testnetNetwork, args);
 
     expect(txResult.txid).toEqual('0xsuccess');
+  });
+});
+
+describe('Subdomain Migration', () => {
+  // Consider test scenarios for subdomain migration
+  const subDomainTestData: Array<[string, string, string, { txid: string, error: string | null, status: number }]> = [
+    [
+      'sound idle panel often situate develop unit text design antenna vendor screen opinion balcony share trigger accuse scatter visa uniform brass update opinion media',
+      'test1.id.stx', // Subdomain to be migrated: success
+      'ST3WTH31TWVYDD1YGYKSZK8XFJ3Z1Z5JMGGRF4558', // Owner will match
+      { txid: 'success', error: null, status: 200 } // expected output, successfully migrated
+    ],
+    [
+      'sound idle panel often situate develop unit text design antenna vendor screen opinion balcony share trigger accuse scatter visa uniform brass update opinion media',
+      'test2.id.stx', // Subdomain to be migrated
+      'ST3Q2T3380WE1K5PW72R6R76Q8HRPEK8HR02W6V1M', // Owner mismatch
+      { txid: 'error', error: 'Only owner of subdoamin can invoke the transfer operation', status: 400 } // expected output, not migrated due to owner mismatch
+    ]
+  ];
+
+  // Perform test on subdomain migration command
+  test.each(subDomainTestData)('Transfer subdomains to wallet-key addresses that correspond to all data-key addresses', async (mnemonic, subdomain, owner, expected) => {
+    const args = [ mnemonic ];
+    // Mock gaia hub response during restore wallet
+    const mockGaiaHubInfo = JSON.stringify({
+      read_url_prefix: 'https://gaia.blockstack.org/hub/',
+      challenge_text: '["gaiahub","0","gaia-0","blockstack_storage_please_sign"]',
+      latest_auth_version: 'v1',
+    });
+
+    fetchMock
+      .once(mockGaiaHubInfo)
+      .once(JSON.stringify('no found'), { status: 404 }) // legacy wallet config
+      .once(JSON.stringify({ names: [ subdomain ] })) // resolve username of this account
+      .once(JSON.stringify('ok')) // updateWalletConfig
+      .once(JSON.stringify({ names: [ subdomain ]})) // to be migrated
+      .once(JSON.stringify({ names: [ 'test3.id.stx', 'test4.id.stx' ]})) // already found subdomain at wallet key address
+      .once(JSON.stringify({
+        address: owner,
+        blockchain: "stacks",
+        last_txid: "0x0db9d08ee00bff3cfaeb8c881a1d6391ae974cd8e9143ecb4b60eb1ceb57fbc9",
+        resolver: "https://registrar.stacks.co",
+        status: "registered_subdomain",
+        zonefile: "$ORIGIN test1.id.stx\n$TTL 3600\n_http._tcp\tIN\tURI\t10\t1\t\"https://gaia.blockstack.org/hub/12imq5x4FdqMJVdLAsaRnWTe662ddyWJRT/profile.json\"\n\n",
+        zonefile_hash: "4f1f4fdd335e66b9798e0b86cf337d7a"
+      }))
+      .once(JSON.stringify(expected), { status: expected.status });
+    const promptName = subdomain.replaceAll('.', '_');
+    const contractInputArg: { [key: string]: boolean } = {};
+    // Mock the user input as yes to migrate the subdomain
+    contractInputArg[promptName] = true;
+
+    // @ts-ignore
+    inquirer.prompt = jest.fn().mockResolvedValue(contractInputArg);
+
+    const output = await migrateSubdomains(testnetNetwork, args);
+
+    expect(JSON.parse(output)).toEqual(expected);
+    fetchMock.resetMocks();
+  });
+
+  test('Subdomain signature verification', () => {
+    const privateKey = 'a5c61c6ca7b3e7e55edee68566aeab22e4da26baa285c7bd10e8d2218aa3b229';
+    // Generate Subdomain Operation payload starting with signature
+    const subDomainOp: SubdomainOp = {
+      subdomainName: 'test.id.stx',
+      owner: 'ST3WTH31TWVYDD1YGYKSZK8XFJ3Z1Z5JMGGRF4558',
+      zonefile: "$ORIGIN test1.id.stx\n$TTL 3600\n_http._tcp\tIN\tURI\t10\t1\t\"https://gaia.blockstack.org/hub/12imq5x4FdqMJVdLAsaRnWTe662ddyWJRT/profile.json\"\n\n",
+      sequenceNumber: 1,
+    };
+    const subdomainPieces = subdomainOpToZFPieces(subDomainOp);
+    const textToSign = subdomainPieces.txt.join(',');
+    // Generate signature: https://docs.stacks.co/build-apps/references/bns#subdomain-lifecycle
+    /**
+     * *********************** IMPORTANT **********************************************
+     * subdomain operation will only be accepted if it has a later "sequence=" number,*
+     * and a valid signature in "sig=" over the transaction body .The "sig=" field    *
+     * includes both the public key and signature, and the public key must hash to    *
+     * the previous subdomain operation's "addr=" field                               *
+     * ********************************************************************************
+     */
+    const hash = crypto.createHash('sha256').update(textToSign).digest('hex');
+    const sig = signWithKey(createStacksPrivateKey(privateKey), hash);
+
+    subDomainOp.signature = sig.data; // Assign signature to subDomainOp
+
+    // Verify that the generated signature is valid
+    const pubKey = publicKeyFromSignature(hash, sig);
+    // Skip the recovery params bytes from signature and then verify
+    const isValid = verifySignature(subDomainOp.signature.slice(2), hash, pubKey);
+
+    expect(isValid).toEqual(true);
   });
 });

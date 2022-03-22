@@ -10,6 +10,9 @@ import lodashCloneDeep from 'lodash.clonedeep';
 import { with0x } from '@stacks/common';
 import { bytesToHex } from '@noble/hashes/utils';
 
+// Export verify as utility method for signature verification
+export { verify as verifySignature } from '@noble/secp256k1';
+
 /**
  * Use utils.randomBytes to replace randombytes dependency
  * Generates a buffer with random bytes of given length
