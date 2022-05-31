@@ -1,4 +1,3 @@
-import 'cross-fetch/polyfill';
 
 // Define a default request options and allow modification using getters, setters
 // Reference: https://developer.mozilla.org/en-US/docs/Web/API/Request/Request
